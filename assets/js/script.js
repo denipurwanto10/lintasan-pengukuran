@@ -2,6 +2,7 @@
 let titikLintasan = [];
 let modeInput = "koordinat";
 let notificationCounter = 0;
+let editIndex = null; // Untuk menyimpan indeks titik yang sedang diedit
 
 // Referensi DOM
 const canvas = document.getElementById('surveyCanvas');
@@ -32,11 +33,13 @@ const inputY = document.getElementById('inputY');
 const inputJarak = document.getElementById('inputJarak');
 const inputAzimuth = document.getElementById('inputAzimuth');
 
+// Modal untuk edit (akan dibuat dinamis)
+let editModal = null;
+
 // ======================== SISTEM NOTIFIKASI ========================
 function showNotification(message, type = 'success', title = '') {
     const container = document.getElementById('notificationContainer');
     if (!container) {
-        // Buat container jika belum ada
         const newContainer = document.createElement('div');
         newContainer.id = 'notificationContainer';
         newContainer.className = 'notification-container';
@@ -75,7 +78,6 @@ function showNotification(message, type = 'success', title = '') {
     
     notifContainer.appendChild(notification);
     
-    // Auto remove setelah 3 detik
     setTimeout(() => {
         const el = document.getElementById(`notif-${id}`);
         if (el) {
@@ -195,7 +197,6 @@ function tambahKoordinat() {
     renderDaftarTitik();
     updateInfoDanGambar();
     
-    // RESET INPUT - tambahkan 2 baris ini
     inputX.value = '';
     inputY.value = '';
     
@@ -283,6 +284,115 @@ function contohTerbuka() {
     showNotification("Contoh lintasan terbuka dimuat. Gunakan 'Tutup Lintasan' untuk menghitung luas.", "success", "Contoh Dimuat");
 }
 
+// ======================== FUNGSI EDIT TITIK ========================
+function createEditModal() {
+    if (editModal) return editModal;
+    
+    const modal = document.createElement('div');
+    modal.id = 'editModal';
+    modal.style.cssText = `
+        display: none;
+        position: fixed;
+        z-index: 10000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        backdrop-filter: blur(4px);
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 1.2rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        ">
+            <h3 style="margin-bottom: 15px; color: #1a4a5f;">✏️ Edit Titik</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Koordinat X (meter)</label>
+                <input type="number" id="editX" step="any" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Koordinat Y (meter)</label>
+                <input type="number" id="editY" step="any" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="saveEditBtn" style="flex: 1; padding: 10px; background: #2c7da0; color: white; border: none; border-radius: 8px; cursor: pointer;">💾 Simpan</button>
+                <button id="cancelEditBtn" style="flex: 1; padding: 10px; background: #95a5a6; color: white; border: none; border-radius: 8px; cursor: pointer;">✖️ Batal</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    editModal = modal;
+    return editModal;
+}
+
+function showEditModal(index) {
+    const modal = createEditModal();
+    const titik = titikLintasan[index];
+    
+    document.getElementById('editX').value = titik.x;
+    document.getElementById('editY').value = titik.y;
+    
+    modal.style.display = 'block';
+    
+    const saveBtn = document.getElementById('saveEditBtn');
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    
+    const saveHandler = () => {
+        const newX = parseFloat(document.getElementById('editX').value);
+        const newY = parseFloat(document.getElementById('editY').value);
+        
+        if (isNaN(newX) || isNaN(newY)) {
+            showNotification("Masukkan nilai koordinat yang valid!", "error", "Edit Gagal");
+            return;
+        }
+        
+        const oldPoint = { ...titikLintasan[index] };
+        titikLintasan[index] = { x: newX, y: newY };
+        
+        renderDaftarTitik();
+        updateInfoDanGambar();
+        
+        showNotification(
+            `Titik #${index + 1} diubah dari (${oldPoint.x.toFixed(2)}, ${oldPoint.y.toFixed(2)}) ke (${newX.toFixed(2)}, ${newY.toFixed(2)})`,
+            "success",
+            "Titik Diperbarui"
+        );
+        
+        modal.style.display = 'none';
+        cleanup();
+    };
+    
+    const cancelHandler = () => {
+        modal.style.display = 'none';
+        cleanup();
+    };
+    
+    const cleanup = () => {
+        saveBtn.removeEventListener('click', saveHandler);
+        cancelBtn.removeEventListener('click', cancelHandler);
+        window.removeEventListener('click', outsideClickHandler);
+    };
+    
+    const outsideClickHandler = (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+            cleanup();
+        }
+    };
+    
+    saveBtn.addEventListener('click', saveHandler);
+    cancelBtn.addEventListener('click', cancelHandler);
+    window.addEventListener('click', outsideClickHandler);
+}
+
 function renderDaftarTitik() {
     if (!listContainer) return;
     if (titikLintasan.length === 0) {
@@ -292,25 +402,41 @@ function renderDaftarTitik() {
     let html = '';
     titikLintasan.forEach((titik, idx) => {
         html += `
-            <div class="point-item">
+            <div class="point-item" style="position: relative;">
                 <span><strong>#${idx + 1}</strong> &nbsp; (${titik.x.toFixed(2)}, ${titik.y.toFixed(2)})</span>
-                <div>
-                    <button class="delete-point" data-index="${idx}" title="Hapus titik">✖</button>
+                <div style="display: flex; gap: 5px;">
+                    <button class="edit-point" data-index="${idx}" style="background: none; border: none; cursor: pointer; color: #2c7da0; font-size: 1rem; padding: 4px 6px;" title="Edit titik">✏️</button>
+                    <button class="delete-point" data-index="${idx}" style="background: none; border: none; cursor: pointer; color: #c97e5a; font-size: 1rem; padding: 4px 6px;" title="Hapus titik">🗑️</button>
                 </div>
             </div>
         `;
     });
     listContainer.innerHTML = html;
+    
+    // Event listener untuk edit
+    document.querySelectorAll('.edit-point').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const index = parseInt(btn.getAttribute('data-index'), 10);
+            if (index >= 0 && index < titikLintasan.length) {
+                showEditModal(index);
+            }
+        });
+    });
+    
+    // Event listener untuk delete
     document.querySelectorAll('.delete-point').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const index = parseInt(btn.getAttribute('data-index'), 10);
             if (index >= 0 && index < titikLintasan.length) {
                 const deletedPoint = titikLintasan[index];
-                titikLintasan.splice(index, 1);
-                renderDaftarTitik();
-                updateInfoDanGambar();
-                showNotification(`Titik #${index + 1} (${deletedPoint.x.toFixed(2)}, ${deletedPoint.y.toFixed(2)}) dihapus`, "warning", "Titik Dihapus");
+                if (confirm(`Hapus titik #${index + 1} (${deletedPoint.x.toFixed(2)}, ${deletedPoint.y.toFixed(2)})?`)) {
+                    titikLintasan.splice(index, 1);
+                    renderDaftarTitik();
+                    updateInfoDanGambar();
+                    showNotification(`Titik #${index + 1} dihapus`, "warning", "Titik Dihapus");
+                }
             }
         });
     });
