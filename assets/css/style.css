@@ -686,4 +686,36 @@ hr {
     .example-buttons {
         grid-template-columns: 1fr 1fr;
     }
+    /* Tambahan untuk efek hover pada tombol edit */
+.edit-point:hover {
+    transform: scale(1.1);
+    background: none !important;
+    box-shadow: none !important;
+}
+
+.edit-point:active {
+    transform: scale(0.95);
+}
+
+/* Animasi untuk modal */
+#editModal {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Responsif untuk modal di mobile */
+@media (max-width: 768px) {
+    #editModal > div {
+        margin: 30% auto !important;
+        width: 95% !important;
+    }
+}
 }
