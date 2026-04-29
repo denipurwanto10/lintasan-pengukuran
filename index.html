@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sistem Survei Tanah | Pengukuran Lintasan & Luas Poligon</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="dashboard">
+    <div class="header">
+        <h1>🗺️ SISTEM LINTASAN PENGUKURAN</h1>
+        <p>📐 Pengukuran Lintasan + Hitung Luas (Standar Poligon Tertutup/Terbuka)</p>
+    </div>
+
+    <div class="two-columns">
+        <!-- Sisi Kiri : Input & Kontrol -->
+        <div class="input-panel">
+            <!-- Mode Input -->
+            <div class="mode-selector">
+                <label>📌 Mode Input:</label>
+                <div class="mode-buttons">
+                    <button id="modeKoordinatBtn" class="mode-btn active">📍 Koordinat (X,Y)</button>
+                    <button id="modeJarakArahBtn" class="mode-btn">🧭 Jarak + Arah</button>
+                </div>
+            </div>
+
+            <!-- Form Input Koordinat -->
+            <div id="formKoordinat" class="input-form">
+                <div class="coord-row">
+                    <div class="coord-field">
+                        <label>📍 Koordinat X (meter)</label>
+                        <input type="number" id="inputX" placeholder="contoh: 50" value="0" step="any">
+                    </div>
+                    <div class="coord-field">
+                        <label>📍 Koordinat Y (meter)</label>
+                        <input type="number" id="inputY" placeholder="contoh: 0" value="0" step="any">
+                    </div>
+                </div>
+                <button id="btnTambahKoordinat" class="btn-primary">➕ Tambah Titik (X,Y)</button>
+            </div>
+
+            <!-- Form Input Jarak + Arah -->
+            <div id="formJarakArah" class="input-form" style="display:none;">
+                <div class="coord-row">
+                    <div class="coord-field">
+                        <label>📏 Jarak (meter)</label>
+                        <input type="number" id="inputJarak" placeholder="contoh: 107.7" step="any">
+                    </div>
+                    <div class="coord-field">
+                        <label>🧭 Azimuth / Sudut (°)</label>
+                        <input type="number" id="inputAzimuth" placeholder="0° - 360°" step="any" min="0" max="360">
+                    </div>
+                </div>
+                <div class="info-azimuth">
+                    <small>Azimuth 0° = Utara, 90° = Timur, 180° = Selatan, 270° = Barat</small>
+                </div>
+                <button id="btnTambahJarakArah" class="btn-primary">➕ Tambah dari Titik Terakhir</button>
+                <button id="btnTitikAwal" class="btn-secondary">📍 Set Titik Awal (0,0)</button>
+            </div>
+
+            <div class="btn-group-full">
+                <button id="btnTutupLintasan" class="btn-warning">🔄 Tutup Lintasan (Kembali ke Titik 1)</button>
+                <button id="btnResetSemua" class="btn-reset">🗑️ Reset Semua</button>
+            </div>
+
+            <div class="btn-group-full">
+                <button id="btnContohPoligon" class="btn-secondary">✨ Contoh Poligon Tertutup (tanah)</button>
+                <button id="btnContohTerbuka" class="btn-secondary">📏 Contoh Lintasan Terbuka</button>
+            </div>
+
+            <!-- Daftar Titik -->
+            <div class="points-list">
+                <h3>📌 Daftar Titik Lintasan</h3>
+                <div id="listContainer" class="list-container">
+                    <div class="empty-msg">Belum ada titik. Tambahkan titik untuk memulai survei.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sisi Kanan : Canvas & Info Survei -->
+        <div class="canvas-panel">
+            <div class="canvas-wrapper">
+                <canvas id="surveyCanvas" width="700" height="450" style="width:100%; height:auto; max-width:700px; aspect-ratio:700/450"></canvas>
+            </div>
+            
+            <!-- Hasil Perhitungan Survei -->
+            <div class="info-survei">
+                <div class="total-jarak" id="totalJarakDisplay">📏 Total Jarak Lintasan: 0.00 m</div>
+                <div class="luas-area" id="luasAreaDisplay">📐 Luas Area (Poligon Tertutup): 0.00 m² | 0.000 ha</div>
+                <div id="closingErrorDisplay" class="closing-error">⚠️ Belum tertutup / tidak bisa hitung error</div>
+                <div id="segmentDetail" class="segment-list"></div>
+                <hr>
+                <div class="catatan">
+                    💡 Tips: Klik kanan pada canvas untuk reset zoom. <br>
+                    🧭 Azimuth: 0°=Utara, 90°=Timur, 180°=Selatan, 270°=Barat
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/script.js"></script>
+</body>
+</html>
