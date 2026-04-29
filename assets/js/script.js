@@ -194,6 +194,11 @@ function tambahKoordinat() {
     titikLintasan.push({ x, y });
     renderDaftarTitik();
     updateInfoDanGambar();
+    
+    // RESET INPUT - tambahkan 2 baris ini
+    inputX.value = '';
+    inputY.value = '';
+    
     inputX.focus();
     showNotification(`Titik #${titikLintasan.length} ditambahkan di (${x.toFixed(2)}, ${y.toFixed(2)})`, "success", "Titik Ditambahkan");
 }
