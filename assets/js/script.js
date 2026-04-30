@@ -1,16 +1,24 @@
-// ======================== DATA & STATE ========================
+// ========================================
+// SURVEY LINTASAN PRO - MAIN SCRIPT
+// ========================================
+
+// State Management
 let titikLintasan = [];
 let modeInput = "koordinat";
-let notificationCounter = 0;
-let editIndex = null; // Untuk menyimpan indeks titik yang sedang diedit
+let zoomLevel = 1;
+let panX = 0, panY = 0;
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
 
-// Referensi DOM
+// DOM Elements
 const canvas = document.getElementById('surveyCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = 700;
-canvas.height = 450;
 
-// Elemen UI
+// Set canvas size
+canvas.width = 800;
+canvas.height = 500;
+
+// UI Elements
 const modeKoordinatBtn = document.getElementById('modeKoordinatBtn');
 const modeJarakArahBtn = document.getElementById('modeJarakArahBtn');
 const formKoordinat = document.getElementById('formKoordinat');
@@ -22,74 +30,68 @@ const btnTutupLintasan = document.getElementById('btnTutupLintasan');
 const btnResetSemua = document.getElementById('btnResetSemua');
 const btnContohPoligon = document.getElementById('btnContohPoligon');
 const btnContohTerbuka = document.getElementById('btnContohTerbuka');
+const resetZoomBtn = document.getElementById('resetZoomBtn');
 const listContainer = document.getElementById('listContainer');
 const totalJarakSpan = document.getElementById('totalJarakDisplay');
 const luasAreaSpan = document.getElementById('luasAreaDisplay');
 const closingErrorSpan = document.getElementById('closingErrorDisplay');
 const segmentDetailDiv = document.getElementById('segmentDetail');
+const titikCountSpan = document.getElementById('titikCount');
+const segmentCountSpan = document.getElementById('segmentCount');
 
 const inputX = document.getElementById('inputX');
 const inputY = document.getElementById('inputY');
 const inputJarak = document.getElementById('inputJarak');
 const inputAzimuth = document.getElementById('inputAzimuth');
 
-// Modal untuk edit (akan dibuat dinamis)
-let editModal = null;
+// Modal Elements
+const editModal = document.getElementById('editModal');
+let editIndex = null;
 
-// ======================== SISTEM NOTIFIKASI ========================
+// ======================== NOTIFICATION SYSTEM ========================
 function showNotification(message, type = 'success', title = '') {
     const container = document.getElementById('notificationContainer');
-    if (!container) {
-        const newContainer = document.createElement('div');
-        newContainer.id = 'notificationContainer';
-        newContainer.className = 'notification-container';
-        document.body.appendChild(newContainer);
-    }
-    
-    const notifContainer = document.getElementById('notificationContainer');
-    const id = Date.now() + notificationCounter++;
+    const id = Date.now();
     
     const titles = {
-        success: '✅ Berhasil',
-        error: '❌ Gagal',
-        warning: '⚠️ Peringatan',
-        info: 'ℹ️ Info'
+        success: 'Berhasil',
+        error: 'Gagal',
+        warning: 'Peringatan',
+        info: 'Info'
+    };
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
     };
     
     const finalTitle = title || titles[type] || 'Info';
-    const icon = {
-        success: '✓',
-        error: '✗',
-        warning: '!',
-        info: 'i'
-    };
     
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.id = `notif-${id}`;
     notification.innerHTML = `
-        <div class="notification-icon">${icon[type] || 'ℹ️'}</div>
+        <div class="notification-icon">${icons[type] || 'ℹ️'}</div>
         <div class="notification-content">
             <div class="notification-title">${finalTitle}</div>
             <div class="notification-message">${message}</div>
         </div>
-        <button class="notification-close" onclick="this.parentElement.remove()">✕</button>
     `;
     
-    notifContainer.appendChild(notification);
+    container.appendChild(notification);
     
     setTimeout(() => {
         const el = document.getElementById(`notif-${id}`);
         if (el) {
-            el.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => {
-                if (el && el.parentElement) el.remove();
-            }, 300);
+            el.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => el.remove(), 300);
         }
     }, 3000);
 }
 
-// ======================== FUNGSI GEOMETRI ========================
+// ======================== GEOMETRY FUNCTIONS ========================
 function hitungJarak(p1, p2) {
     const dx = p1.x - p2.x;
     const dy = p1.y - p2.y;
@@ -137,127 +139,333 @@ function hitungClosingError(points) {
     return { errorX, errorY, errorDistance };
 }
 
+// ======================== UPDATE UI ========================
 function updateInfoDanGambar() {
     const { total, segments } = hitungTotalDanSegmen(titikLintasan);
     
     if (titikLintasan.length < 2) {
-        totalJarakSpan.innerHTML = `📏 Total Jarak Lintasan: <strong>0.00 m</strong> (minimal 2 titik)`;
-        luasAreaSpan.innerHTML = `📐 Luas Area: 0.00 m² | 0.000 ha`;
-        closingErrorSpan.innerHTML = `⚠️ Belum cukup titik untuk analisis penutupan`;
-        segmentDetailDiv.innerHTML = '';
+        totalJarakSpan.innerHTML = `0.00 m`;
+        luasAreaSpan.innerHTML = `0 m²`;
+        closingErrorSpan.innerHTML = `--`;
+        segmentDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
+        if (segmentCountSpan) segmentCountSpan.innerText = '0';
     } else {
-        totalJarakSpan.innerHTML = `📏 Total Jarak Lintasan: <strong>${total.toFixed(2)} m</strong>`;
+        totalJarakSpan.innerHTML = `${total.toFixed(2)} m`;
         
         let segHtml = '';
         segments.forEach((seg, idx) => {
-            segHtml += `<div class="segment-badge">📏 S${idx+1}: ${seg.distance.toFixed(2)} m</div>`;
+            segHtml += `<div class="segment-badge">S${idx + 1}: ${seg.distance.toFixed(2)} m</div>`;
         });
         segmentDetailDiv.innerHTML = segHtml;
+        if (segmentCountSpan) segmentCountSpan.innerText = segments.length;
         
         let luas = 0;
         if (titikLintasan.length >= 3) {
             luas = hitungLuasPoligon(titikLintasan);
         }
-        luasAreaSpan.innerHTML = `📐 Luas Area (Poligon): <strong>${luas.toFixed(2)} m²</strong> | ${(luas / 10000).toFixed(4)} ha`;
+        luasAreaSpan.innerHTML = `${luas.toFixed(2)} m² <small style="font-size:0.7rem;">(${(luas / 10000).toFixed(4)} ha)</small>`;
         
         const error = hitungClosingError(titikLintasan);
         if (error && titikLintasan.length >= 2) {
             if (Math.abs(error.errorDistance) < 0.001) {
-                closingErrorSpan.innerHTML = `✅ Lintasan TERTUTUP sempurna (error: 0.00 m)`;
+                closingErrorSpan.innerHTML = `0.00 m (Tertutup Sempurna)`;
+                closingErrorSpan.style.color = '#10b981';
             } else {
-                closingErrorSpan.innerHTML = `⚠️ Error penutupan: ΔX = ${error.errorX.toFixed(3)} m, ΔY = ${error.errorY.toFixed(3)} m | Jarak error: ${error.errorDistance.toFixed(3)} m`;
+                closingErrorSpan.innerHTML = `${error.errorDistance.toFixed(3)} m`;
+                closingErrorSpan.style.color = '#fbbf24';
             }
-        } else {
-            closingErrorSpan.innerHTML = `📌 Lintasan TERBUKA (belum kembali ke titik awal)`;
         }
     }
+    
+    if (titikCountSpan) titikCountSpan.innerText = titikLintasan.length;
     gambarLintasan();
 }
 
-function tutupLintasan() {
-    if (titikLintasan.length < 2) {
-        showNotification("Minimal 2 titik untuk menutup lintasan!", "warning", "Tidak Bisa Tutup");
+// ======================== RENDER DAFTAR TITIK ========================
+function renderDaftarTitik() {
+    if (!listContainer) return;
+    
+    if (titikLintasan.length === 0) {
+        listContainer.innerHTML = `
+            <div class="empty-msg">
+                <i class="fas fa-map-marker-alt"></i><br>
+                Belum ada titik<br>
+                <small>Mulai survei dengan menambahkan titik</small>
+            </div>
+        `;
         return;
     }
-    const titikAwal = titikLintasan[0];
-    titikLintasan.push({ x: titikAwal.x, y: titikAwal.y });
-    renderDaftarTitik();
-    updateInfoDanGambar();
-    showNotification(`Lintasan ditutup ke titik awal (${titikAwal.x.toFixed(2)}, ${titikAwal.y.toFixed(2)})`, "success", "Lintasan Tertutup");
+    
+    let html = '';
+    titikLintasan.forEach((titik, idx) => {
+        html += `
+            <div class="point-item">
+                <span>
+                    <strong>#${idx + 1}</strong>
+                    (${titik.x.toFixed(2)}, ${titik.y.toFixed(2)})
+                </span>
+                <div class="point-actions">
+                    <button class="edit-point" data-index="${idx}" title="Edit Titik">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <button class="delete-point" data-index="${idx}" title="Hapus Titik">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    listContainer.innerHTML = html;
+    
+    // Edit event
+    document.querySelectorAll('.edit-point').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const index = parseInt(btn.dataset.index, 10);
+            if (index >= 0 && index < titikLintasan.length) {
+                showEditModal(index);
+            }
+        });
+    });
+    
+    // Delete event
+    document.querySelectorAll('.delete-point').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const index = parseInt(btn.dataset.index, 10);
+            if (index >= 0 && index < titikLintasan.length) {
+                const deleted = titikLintasan[index];
+                if (confirm(`Hapus titik #${index + 1} (${deleted.x.toFixed(2)}, ${deleted.y.toFixed(2)})?`)) {
+                    titikLintasan.splice(index, 1);
+                    renderDaftarTitik();
+                    updateInfoDanGambar();
+                    showNotification(`Titik #${index + 1} dihapus`, 'warning');
+                }
+            }
+        });
+    });
 }
 
+// ======================== CANVAS DRAWING ========================
+function gambarLintasan() {
+    if (!ctx) return;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    
+    if (titikLintasan.length === 0) {
+        ctx.font = "500 14px 'Plus Jakarta Sans'";
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "center";
+        ctx.fillText("🗺️ Tambahkan titik untuk memulai survei", w/2, h/2);
+        return;
+    }
+    
+    // Calculate bounds
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    titikLintasan.forEach(p => {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+    });
+    
+    const padding = 60;
+    const rangeX = maxX - minX;
+    const rangeY = maxY - minY;
+    
+    let scaleX = (w - 2 * padding) / (rangeX || 1);
+    let scaleY = (h - 2 * padding) / (rangeY || 1);
+    const scale = Math.min(scaleX, scaleY) * zoomLevel;
+    
+    const offsetX = (w - (rangeX || 1) * scale) / 2 + panX;
+    const offsetY = (h - (rangeY || 1) * scale) / 2 + panY;
+    
+    const mapX = (x) => offsetX + (x - minX) * scale;
+    const mapY = (y) => offsetY + (maxY - y) * scale;
+    
+    // Draw grid
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i <= 8; i++) {
+        const xVal = minX + (rangeX * i / 8);
+        const px = mapX(xVal);
+        if (px >= 0 && px <= w) {
+            ctx.beginPath();
+            ctx.moveTo(px, 0);
+            ctx.lineTo(px, h);
+            ctx.stroke();
+        }
+        const yVal = minY + (rangeY * i / 8);
+        const py = mapY(yVal);
+        if (py >= 0 && py <= h) {
+            ctx.beginPath();
+            ctx.moveTo(0, py);
+            ctx.lineTo(w, py);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+    
+    // Draw lines
+    if (titikLintasan.length >= 2) {
+        ctx.beginPath();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#3b82f6";
+        ctx.shadowBlur = 2;
+        ctx.shadowColor = "rgba(0,0,0,0.1)";
+        ctx.moveTo(mapX(titikLintasan[0].x), mapY(titikLintasan[0].y));
+        for (let i = 1; i < titikLintasan.length; i++) {
+            ctx.lineTo(mapX(titikLintasan[i].x), mapY(titikLintasan[i].y));
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        // Segment labels
+        ctx.font = "bold 10px 'Plus Jakarta Sans'";
+        ctx.fillStyle = "#475569";
+        for (let i = 0; i < titikLintasan.length - 1; i++) {
+            const p1 = titikLintasan[i], p2 = titikLintasan[i+1];
+            const x1 = mapX(p1.x), y1 = mapY(p1.y);
+            const x2 = mapX(p2.x), y2 = mapY(p2.y);
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2;
+            const jarak = hitungJarak(p1, p2);
+            
+            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            ctx.fillRect(midX - 20, midY - 9, 40, 16);
+            ctx.fillStyle = "#2563eb";
+            ctx.fillText(`${jarak.toFixed(1)}m`, midX - 16, midY - 2);
+        }
+    }
+    
+    // Draw points
+    for (let i = 0; i < titikLintasan.length; i++) {
+        const p = titikLintasan[i];
+        const cx = mapX(p.x), cy = mapY(p.y);
+        
+        ctx.beginPath();
+        ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3.5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#3b82f6";
+        ctx.fill();
+        
+        ctx.font = "bold 11px 'Plus Jakarta Sans'";
+        ctx.fillStyle = "#1e293b";
+        ctx.shadowBlur = 0;
+        ctx.fillText(`${i + 1}`, cx - 5, cy - 8);
+    }
+}
+
+// ======================== MODAL EDIT ========================
+function showEditModal(index) {
+    editIndex = index;
+    const titik = titikLintasan[index];
+    document.getElementById('editX').value = titik.x;
+    document.getElementById('editY').value = titik.y;
+    editModal.style.display = 'flex';
+}
+
+function closeEditModal() {
+    editModal.style.display = 'none';
+    editIndex = null;
+}
+
+function saveEdit() {
+    if (editIndex === null) return;
+    const newX = parseFloat(document.getElementById('editX').value);
+    const newY = parseFloat(document.getElementById('editY').value);
+    
+    if (isNaN(newX) || isNaN(newY)) {
+        showNotification('Masukkan koordinat yang valid!', 'error');
+        return;
+    }
+    
+    titikLintasan[editIndex] = { x: newX, y: newY };
+    renderDaftarTitik();
+    updateInfoDanGambar();
+    showNotification(`Titik #${editIndex + 1} berhasil diupdate`, 'success');
+    closeEditModal();
+}
+
+// ======================== ACTIONS ========================
 function tambahKoordinat() {
     let x = parseFloat(inputX.value);
     let y = parseFloat(inputY.value);
     if (isNaN(x) || isNaN(y)) {
-        showNotification("Masukkan angka yang valid untuk X dan Y!", "error", "Input Tidak Valid");
+        showNotification('Masukkan nilai X dan Y yang valid!', 'error');
         return;
     }
     titikLintasan.push({ x, y });
     renderDaftarTitik();
     updateInfoDanGambar();
-    
     inputX.value = '';
     inputY.value = '';
-    
-    inputX.focus();
-    showNotification(`Titik #${titikLintasan.length} ditambahkan di (${x.toFixed(2)}, ${y.toFixed(2)})`, "success", "Titik Ditambahkan");
+    showNotification(`Titik #${titikLintasan.length} ditambahkan di (${x.toFixed(2)}, ${y.toFixed(2)})`, 'success');
 }
 
 function tambahJarakArah() {
     if (titikLintasan.length === 0) {
-        showNotification("Tentukan titik awal terlebih dahulu! Klik 'Set Titik Awal (0,0)'", "warning", "Titik Awal Belum Ada");
+        showNotification('Set titik awal terlebih dahulu!', 'warning');
         return;
     }
     let jarak = parseFloat(inputJarak.value);
     let azimuth = parseFloat(inputAzimuth.value);
     if (isNaN(jarak) || isNaN(azimuth)) {
-        showNotification("Masukkan jarak (meter) dan azimuth (derajat) yang valid!", "error", "Input Tidak Valid");
+        showNotification('Masukkan jarak dan azimuth yang valid!', 'error');
         return;
     }
     if (azimuth < 0 || azimuth > 360) {
-        showNotification("Azimuth harus antara 0° - 360°", "error", "Nilai Azimuth Invalid");
+        showNotification('Azimuth harus antara 0° - 360°', 'error');
         return;
     }
-    const titikTerakhir = titikLintasan[titikLintasan.length - 1];
+    const last = titikLintasan[titikLintasan.length - 1];
     const { dx, dy } = azimuthToDelta(jarak, azimuth);
-    const titikBaru = {
-        x: titikTerakhir.x + dx,
-        y: titikTerakhir.y + dy
-    };
-    titikLintasan.push(titikBaru);
+    titikLintasan.push({ x: last.x + dx, y: last.y + dy });
     renderDaftarTitik();
     updateInfoDanGambar();
     inputJarak.value = '';
     inputAzimuth.value = '';
-    inputJarak.focus();
-    showNotification(`Titik #${titikLintasan.length} dari jarak ${jarak.toFixed(2)} m, azimuth ${azimuth}° → (${titikBaru.x.toFixed(2)}, ${titikBaru.y.toFixed(2)})`, "success", "Titik Ditambahkan");
+    showNotification(`Titik #${titikLintasan.length} ditambahkan`, 'success');
 }
 
 function setTitikAwal() {
-    const resetMsg = titikLintasan.length > 0 ? "Reset titik yang ada dan " : "";
-    if (titikLintasan.length > 0 && !confirm(`⚠️ ${resetMsg}mulai dari (0,0)?`)) {
-        showNotification("Dibatalkan", "info", "Batal");
-        return;
-    }
+    if (titikLintasan.length > 0 && !confirm('Reset titik yang ada dan mulai dari (0,0)?')) return;
     titikLintasan = [{ x: 0, y: 0 }];
     renderDaftarTitik();
     updateInfoDanGambar();
-    showNotification("Titik awal ditetapkan di (0, 0)", "success", "Titik Awal Diset");
+    showNotification('Titik awal ditetapkan di (0, 0)', 'success');
+}
+
+function tutupLintasan() {
+    if (titikLintasan.length < 2) {
+        showNotification('Minimal 2 titik untuk menutup lintasan!', 'warning');
+        return;
+    }
+    const first = titikLintasan[0];
+    titikLintasan.push({ x: first.x, y: first.y });
+    renderDaftarTitik();
+    updateInfoDanGambar();
+    showNotification('Lintasan ditutup ke titik awal', 'success');
 }
 
 function resetSemua() {
-    if (titikLintasan.length > 0 && !confirm("⚠️ Hapus SEMUA titik lintasan?")) {
-        showNotification("Penghapusan dibatalkan", "info", "Batal");
-        return;
-    }
+    if (titikLintasan.length > 0 && !confirm('Hapus semua titik lintasan?')) return;
     titikLintasan = [];
     renderDaftarTitik();
     updateInfoDanGambar();
-    showNotification("Semua titik lintasan telah dihapus", "warning", "Reset Selesai");
+    showNotification('Semua titik telah dihapus', 'info');
 }
 
-function contohPoligonTertutup() {
+function contohPoligon() {
     titikLintasan = [
         { x: 0, y: 0 },
         { x: 100, y: 0 },
@@ -268,7 +476,7 @@ function contohPoligonTertutup() {
     ];
     renderDaftarTitik();
     updateInfoDanGambar();
-    showNotification("Contoh poligon tertutup dimuat. Luas tanah akan dihitung otomatis!", "success", "Contoh Dimuat");
+    showNotification('Contoh poligon tertutup dimuat', 'success');
 }
 
 function contohTerbuka() {
@@ -281,258 +489,17 @@ function contohTerbuka() {
     ];
     renderDaftarTitik();
     updateInfoDanGambar();
-    showNotification("Contoh lintasan terbuka dimuat. Gunakan 'Tutup Lintasan' untuk menghitung luas.", "success", "Contoh Dimuat");
+    showNotification('Contoh lintasan terbuka dimuat', 'success');
 }
 
-// ======================== FUNGSI EDIT TITIK ========================
-function createEditModal() {
-    if (editModal) return editModal;
-    
-    const modal = document.createElement('div');
-    modal.id = 'editModal';
-    modal.style.cssText = `
-        display: none;
-        position: fixed;
-        z-index: 10000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.5);
-        backdrop-filter: blur(4px);
-    `;
-    
-    modal.innerHTML = `
-        <div style="
-            background: white;
-            margin: 15% auto;
-            padding: 20px;
-            border-radius: 1.2rem;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-        ">
-            <h3 style="margin-bottom: 15px; color: #1a4a5f;">✏️ Edit Titik</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Koordinat X (meter)</label>
-                <input type="number" id="editX" step="any" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Koordinat Y (meter)</label>
-                <input type="number" id="editY" step="any" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px;">
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button id="saveEditBtn" style="flex: 1; padding: 10px; background: #2c7da0; color: white; border: none; border-radius: 8px; cursor: pointer;">💾 Simpan</button>
-                <button id="cancelEditBtn" style="flex: 1; padding: 10px; background: #95a5a6; color: white; border: none; border-radius: 8px; cursor: pointer;">✖️ Batal</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    editModal = modal;
-    return editModal;
+function resetZoom() {
+    zoomLevel = 1;
+    panX = 0;
+    panY = 0;
+    gambarLintasan();
 }
 
-function showEditModal(index) {
-    const modal = createEditModal();
-    const titik = titikLintasan[index];
-    
-    document.getElementById('editX').value = titik.x;
-    document.getElementById('editY').value = titik.y;
-    
-    modal.style.display = 'block';
-    
-    const saveBtn = document.getElementById('saveEditBtn');
-    const cancelBtn = document.getElementById('cancelEditBtn');
-    
-    const saveHandler = () => {
-        const newX = parseFloat(document.getElementById('editX').value);
-        const newY = parseFloat(document.getElementById('editY').value);
-        
-        if (isNaN(newX) || isNaN(newY)) {
-            showNotification("Masukkan nilai koordinat yang valid!", "error", "Edit Gagal");
-            return;
-        }
-        
-        const oldPoint = { ...titikLintasan[index] };
-        titikLintasan[index] = { x: newX, y: newY };
-        
-        renderDaftarTitik();
-        updateInfoDanGambar();
-        
-        showNotification(
-            `Titik #${index + 1} diubah dari (${oldPoint.x.toFixed(2)}, ${oldPoint.y.toFixed(2)}) ke (${newX.toFixed(2)}, ${newY.toFixed(2)})`,
-            "success",
-            "Titik Diperbarui"
-        );
-        
-        modal.style.display = 'none';
-        cleanup();
-    };
-    
-    const cancelHandler = () => {
-        modal.style.display = 'none';
-        cleanup();
-    };
-    
-    const cleanup = () => {
-        saveBtn.removeEventListener('click', saveHandler);
-        cancelBtn.removeEventListener('click', cancelHandler);
-        window.removeEventListener('click', outsideClickHandler);
-    };
-    
-    const outsideClickHandler = (e) => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
-            cleanup();
-        }
-    };
-    
-    saveBtn.addEventListener('click', saveHandler);
-    cancelBtn.addEventListener('click', cancelHandler);
-    window.addEventListener('click', outsideClickHandler);
-}
-
-function renderDaftarTitik() {
-    if (!listContainer) return;
-    if (titikLintasan.length === 0) {
-        listContainer.innerHTML = '<div class="empty-msg">✨ Belum ada titik. Mulai survei dengan mode Koordinat atau Jarak+Arah</div>';
-        return;
-    }
-    let html = '';
-    titikLintasan.forEach((titik, idx) => {
-        html += `
-            <div class="point-item" style="position: relative;">
-                <span><strong>#${idx + 1}</strong> &nbsp; (${titik.x.toFixed(2)}, ${titik.y.toFixed(2)})</span>
-                <div style="display: flex; gap: 5px;">
-                    <button class="edit-point" data-index="${idx}" style="background: none; border: none; cursor: pointer; color: #2c7da0; font-size: 1rem; padding: 4px 6px;" title="Edit titik">✏️</button>
-                    <button class="delete-point" data-index="${idx}" style="background: none; border: none; cursor: pointer; color: #c97e5a; font-size: 1rem; padding: 4px 6px;" title="Hapus titik">🗑️</button>
-                </div>
-            </div>
-        `;
-    });
-    listContainer.innerHTML = html;
-    
-    // Event listener untuk edit
-    document.querySelectorAll('.edit-point').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const index = parseInt(btn.getAttribute('data-index'), 10);
-            if (index >= 0 && index < titikLintasan.length) {
-                showEditModal(index);
-            }
-        });
-    });
-    
-    // Event listener untuk delete
-    document.querySelectorAll('.delete-point').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const index = parseInt(btn.getAttribute('data-index'), 10);
-            if (index >= 0 && index < titikLintasan.length) {
-                const deletedPoint = titikLintasan[index];
-                if (confirm(`Hapus titik #${index + 1} (${deletedPoint.x.toFixed(2)}, ${deletedPoint.y.toFixed(2)})?`)) {
-                    titikLintasan.splice(index, 1);
-                    renderDaftarTitik();
-                    updateInfoDanGambar();
-                    showNotification(`Titik #${index + 1} dihapus`, "warning", "Titik Dihapus");
-                }
-            }
-        });
-    });
-}
-
-function gambarLintasan() {
-    if (!ctx) return;
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    if (titikLintasan.length === 0) {
-        ctx.font = "500 14px 'Inter'";
-        ctx.fillStyle = "#8aaec0";
-        ctx.textAlign = "center";
-        ctx.fillText("🗺️ Tambahkan titik survei", w/2, h/2);
-        return;
-    }
-    
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    titikLintasan.forEach(p => {
-        minX = Math.min(minX, p.x);
-        maxX = Math.max(maxX, p.x);
-        minY = Math.min(minY, p.y);
-        maxY = Math.max(maxY, p.y);
-    });
-    if (minX === maxX) { minX -= 20; maxX += 20; }
-    if (minY === maxY) { minY -= 20; maxY += 20; }
-    const padding = 50;
-    const rangeX = maxX - minX;
-    const rangeY = maxY - minY;
-    const mapX = (x) => padding + ((x - minX) / rangeX) * (w - 2 * padding);
-    const mapY = (y) => padding + ((maxY - y) / rangeY) * (h - 2 * padding);
-    
-    if (titikLintasan.length >= 2) {
-        ctx.beginPath();
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "#2c7da0";
-        ctx.moveTo(mapX(titikLintasan[0].x), mapY(titikLintasan[0].y));
-        for (let i = 1; i < titikLintasan.length; i++) {
-            ctx.lineTo(mapX(titikLintasan[i].x), mapY(titikLintasan[i].y));
-        }
-        ctx.stroke();
-        
-        for (let i = 0; i < titikLintasan.length; i++) {
-            const p = titikLintasan[i];
-            const cx = mapX(p.x), cy = mapY(p.y);
-            ctx.beginPath();
-            ctx.arc(cx, cy, 7, 0, 2*Math.PI);
-            ctx.fillStyle = "#fff";
-            ctx.fill();
-            ctx.strokeStyle = "#1f5e7a";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(cx, cy, 3, 0, 2*Math.PI);
-            ctx.fillStyle = "#2c7da0";
-            ctx.fill();
-            ctx.font = "bold 12px 'Inter'";
-            ctx.fillStyle = "#1a4a5f";
-            ctx.fillText(`${i+1}`, cx-6, cy-8);
-        }
-        
-        for (let i = 0; i < titikLintasan.length - 1; i++) {
-            const p1 = titikLintasan[i], p2 = titikLintasan[i+1];
-            const x1 = mapX(p1.x), y1 = mapY(p1.y);
-            const x2 = mapX(p2.x), y2 = mapY(p2.y);
-            const midX = (x1+x2)/2, midY = (y1+y2)/2;
-            const jarak = hitungJarak(p1, p2);
-            ctx.font = "10px monospace";
-            ctx.fillStyle = "#ffffffcc";
-            ctx.fillRect(midX-20, midY-9, 40, 15);
-            ctx.fillStyle = "#2c6e8f";
-            ctx.fillText(`${jarak.toFixed(1)} m`, midX-16, midY-2);
-        }
-    }
-    
-    ctx.save();
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = "#5a8eaa";
-    ctx.lineWidth = 0.6;
-    for (let i=0; i<=4; i++) {
-        const xVal = minX + (rangeX * i/4);
-        const px = mapX(xVal);
-        ctx.beginPath(); ctx.moveTo(px, padding); ctx.lineTo(px, h-padding); ctx.stroke();
-        const yVal = minY + (rangeY * i/4);
-        const py = mapY(yVal);
-        ctx.beginPath(); ctx.moveTo(padding, py); ctx.lineTo(w-padding, py); ctx.stroke();
-    }
-    ctx.restore();
-    ctx.font = "8px monospace";
-    ctx.fillStyle = "#6f95ab";
-    ctx.fillText(`min X: ${minX.toFixed(1)} m`, padding-5, h-padding+15);
-    ctx.fillText(`max X: ${maxX.toFixed(1)} m`, w-padding-60, h-padding+15);
-    ctx.fillText(`max Y: ${maxY.toFixed(1)} m`, padding-5, padding-3);
-}
-
-// ======================== EVENT LISTENER ========================
+// ======================== MODE SWITCH ========================
 function setMode(mode) {
     modeInput = mode;
     if (mode === "koordinat") {
@@ -540,37 +507,77 @@ function setMode(mode) {
         formJarakArah.style.display = "none";
         modeKoordinatBtn.classList.add("active");
         modeJarakArahBtn.classList.remove("active");
-        showNotification("Mode Koordinat aktif. Masukkan nilai X dan Y langsung.", "info", "Mode Berubah");
     } else {
         formKoordinat.style.display = "none";
         formJarakArah.style.display = "block";
         modeKoordinatBtn.classList.remove("active");
         modeJarakArahBtn.classList.add("active");
-        showNotification("Mode Jarak + Arah aktif. Masukkan jarak dan azimuth dari titik terakhir.", "info", "Mode Berubah");
     }
 }
 
-modeKoordinatBtn.addEventListener('click', () => setMode("koordinat"));
-modeJarakArahBtn.addEventListener('click', () => setMode("jarakArah"));
+// ======================== CANVAS INTERACTIONS ========================
+let startX, startY;
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    zoomLevel = Math.min(Math.max(zoomLevel * delta, 0.5), 3);
+    gambarLintasan();
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+        isPanning = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        canvas.style.cursor = 'grabbing';
+    }
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isPanning) return;
+    panX = e.clientX - startX;
+    panY = e.clientY - startY;
+    gambarLintasan();
+});
+
+window.addEventListener('mouseup', () => {
+    isPanning = false;
+    canvas.style.cursor = 'crosshair';
+});
+
+canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    resetZoom();
+});
+
+// ======================== EVENT LISTENERS ========================
+modeKoordinatBtn.addEventListener('click', () => setMode('koordinat'));
+modeJarakArahBtn.addEventListener('click', () => setMode('jarakArah'));
 btnTambahKoordinat.addEventListener('click', tambahKoordinat);
 btnTambahJarakArah.addEventListener('click', tambahJarakArah);
 btnTitikAwal.addEventListener('click', setTitikAwal);
 btnTutupLintasan.addEventListener('click', tutupLintasan);
 btnResetSemua.addEventListener('click', resetSemua);
-btnContohPoligon.addEventListener('click', contohPoligonTertutup);
+btnContohPoligon.addEventListener('click', contohPoligon);
 btnContohTerbuka.addEventListener('click', contohTerbuka);
+resetZoomBtn.addEventListener('click', resetZoom);
 
-canvas.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    gambarLintasan();
+// Modal events
+document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
+document.getElementById('cancelEditBtn').addEventListener('click', closeEditModal);
+document.getElementById('closeModalBtn').addEventListener('click', closeEditModal);
+window.addEventListener('click', (e) => {
+    if (e.target === editModal) closeEditModal();
 });
 
-// Buat container notifikasi
-const notifContainer = document.createElement('div');
-notifContainer.id = 'notificationContainer';
-notifContainer.className = 'notification-container';
-document.body.appendChild(notifContainer);
+// Enter key support
+inputX.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordinat(); });
+inputY.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordinat(); });
+inputJarak.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
+inputAzimuth.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
 
+// Initial render
 window.addEventListener('DOMContentLoaded', () => {
     renderDaftarTitik();
     updateInfoDanGambar();
