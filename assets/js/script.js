@@ -5,6 +5,7 @@ let zoomLevel = 1;
 let panX = 0, panY = 0;
 let isPanning = false;
 let panStart = { x: 0, y: 0 };
+let canvasInitialized = false;
 
 // DOM Elements
 const canvas = document.getElementById('surveyCanvas');
@@ -96,7 +97,6 @@ function hitungJarak(p1, p2) {
 }
 
 function hitungAzimuth(p1, p2) {
-    // Azimuth dari p1 ke p2 (0° = Utara, searah jarum jam)
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     let azimuth = Math.atan2(dx, dy) * 180 / Math.PI;
@@ -152,10 +152,8 @@ function hitungClosingError(points) {
 function updateInfoDanGambar() {
     const { total, segments, bearings } = hitungTotalDanSegmen(titikLintasan);
     
-    // Update total jarak
     totalJarakSpan.innerHTML = `${total.toFixed(2)} m`;
     
-    // Update segmen detail
     if (titikLintasan.length < 2) {
         segmentDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
         bearingDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
@@ -169,7 +167,6 @@ function updateInfoDanGambar() {
         segmentDetailDiv.innerHTML = segHtml;
         if (segmentCountSpan) segmentCountSpan.innerText = segments.length;
         
-        // Update bearing detail
         let bearingHtml = '';
         bearings.forEach((bear, idx) => {
             let direction = '';
@@ -187,14 +184,12 @@ function updateInfoDanGambar() {
         if (bearingCountSpan) bearingCountSpan.innerText = bearings.length;
     }
     
-    // Update luas area
     let luas = 0;
     if (titikLintasan.length >= 3) {
         luas = hitungLuasPoligon(titikLintasan);
     }
     luasAreaSpan.innerHTML = `${luas.toFixed(2)} m² <span style="font-size:0.7rem;">(${(luas / 10000).toFixed(4)} ha)</span>`;
     
-    // Update closing error
     const error = hitungClosingError(titikLintasan);
     if (error && titikLintasan.length >= 2) {
         if (Math.abs(error.errorDistance) < 0.001) {
@@ -209,6 +204,8 @@ function updateInfoDanGambar() {
     }
     
     if (titikCountSpan) titikCountSpan.innerText = titikLintasan.length;
+    
+    // PASTIKAN GAMBAR SELALU DIPANGGIL
     gambarLintasan();
 }
 
@@ -278,8 +275,25 @@ function renderDaftarTitik() {
 // ======================== CANVAS DRAWING ========================
 function gambarLintasan() {
     if (!ctx) return;
+    
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
+    
+    // Gambar background grid ringan
+    ctx.save();
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < w; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, h);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(w, i);
+        ctx.stroke();
+    }
+    ctx.restore();
     
     if (titikLintasan.length === 0) {
         ctx.font = "500 14px 'Plus Jakarta Sans'";
@@ -289,6 +303,7 @@ function gambarLintasan() {
         return;
     }
     
+    // Hitung bounds
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     titikLintasan.forEach(p => {
         minX = Math.min(minX, p.x);
@@ -297,36 +312,57 @@ function gambarLintasan() {
         maxY = Math.max(maxY, p.y);
     });
     
+    // Tambahkan padding
     const padding = 60;
-    const rangeX = maxX - minX;
-    const rangeY = maxY - minY;
+    let rangeX = maxX - minX;
+    let rangeY = maxY - minY;
     
-    let scaleX = (w - 2 * padding) / (rangeX || 1);
-    let scaleY = (h - 2 * padding) / (rangeY || 1);
-    const scale = Math.min(scaleX, scaleY) * zoomLevel;
+    // Jika semua titik sama, beri range default
+    if (rangeX === 0) rangeX = 100;
+    if (rangeY === 0) rangeY = 100;
     
-    const offsetX = (w - (rangeX || 1) * scale) / 2 + panX;
-    const offsetY = (h - (rangeY || 1) * scale) / 2 + panY;
+    let scaleX = (w - 2 * padding) / rangeX;
+    let scaleY = (h - 2 * padding) / rangeY;
+    let scale = Math.min(scaleX, scaleY) * zoomLevel;
     
-    const mapX = (x) => offsetX + (x - minX) * scale;
-    const mapY = (y) => offsetY + (maxY - y) * scale;
+    // Batasi scale agar tidak terlalu kecil/ besar
+    scale = Math.min(Math.max(scale, 0.5), 5);
     
-    // Draw grid
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    
+    const offsetX = w/2 - centerX * scale + panX;
+    const offsetY = h/2 - centerY * scale + panY;
+    
+    const mapX = (x) => offsetX + x * scale;
+    const mapY = (y) => offsetY + y * scale;
+    
+    // Draw grid berdasarkan skala
     ctx.save();
-    ctx.globalAlpha = 0.08;
+    ctx.globalAlpha = 0.15;
     ctx.strokeStyle = "#3b82f6";
-    ctx.lineWidth = 0.8;
-    for (let i = 0; i <= 8; i++) {
-        const xVal = minX + (rangeX * i / 8);
-        const px = mapX(xVal);
+    ctx.lineWidth = 1;
+    
+    // Tentukan interval grid berdasarkan zoom
+    let gridInterval = 50;
+    if (scale > 2) gridInterval = 20;
+    if (scale < 0.5) gridInterval = 100;
+    
+    const startGridX = Math.floor((-offsetX) / scale / gridInterval) * gridInterval;
+    const startGridY = Math.floor((-offsetY) / scale / gridInterval) * gridInterval;
+    
+    for (let x = startGridX; x < startGridX + w/scale + gridInterval; x += gridInterval) {
+        const px = mapX(x);
         if (px >= 0 && px <= w) {
             ctx.beginPath();
             ctx.moveTo(px, 0);
             ctx.lineTo(px, h);
             ctx.stroke();
         }
-        const yVal = minY + (rangeY * i / 8);
-        const py = mapY(yVal);
+    }
+    
+    for (let y = startGridY; y < startGridY + h/scale + gridInterval; y += gridInterval) {
+        const py = mapY(y);
         if (py >= 0 && py <= h) {
             ctx.beginPath();
             ctx.moveTo(0, py);
@@ -350,7 +386,7 @@ function gambarLintasan() {
         ctx.stroke();
         ctx.shadowBlur = 0;
         
-        // Segment labels with azimuth - PERBAIKAN LABEL TIDAK KELUAR KOTAK
+        // Segment labels
         ctx.font = "bold 10px 'Plus Jakarta Sans'";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -364,40 +400,37 @@ function gambarLintasan() {
             const jarak = hitungJarak(p1, p2);
             const azimuth = hitungAzimuth(p1, p2);
             
-            // Format teks
             const jarakText = `${jarak.toFixed(1)}m`;
             const azimuthText = `${azimuth.toFixed(0)}°`;
             
-            // Ukuran teks untuk background (lebih akurat)
             ctx.font = "bold 10px 'Plus Jakarta Sans'";
             const jarakWidth = ctx.measureText(jarakText).width;
             const azimuthWidth = ctx.measureText(azimuthText).width;
             const maxWidth = Math.max(jarakWidth, azimuthWidth) + 16;
             const boxHeight = 28;
             
-            // Posisi box (sedikit offset agar tidak tepat di tengah garis)
             const boxX = midX - maxWidth / 2;
             const boxY = midY - boxHeight / 2;
             
-            // Draw background box dengan rounded rectangle
-            ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-            ctx.shadowBlur = 0;
-            roundedRect(ctx, boxX, boxY, maxWidth, boxHeight, 6);
-            ctx.fill();
-            
-            // Draw inner white background
-            ctx.fillStyle = "#ffffff";
-            roundedRect(ctx, boxX + 1, boxY + 1, maxWidth - 2, boxHeight - 2, 5);
-            ctx.fill();
-            
-            // Draw text
-            ctx.font = "bold 10px 'Plus Jakarta Sans'";
-            ctx.fillStyle = "#1e40af";
-            ctx.fillText(jarakText, midX, midY - 5);
-            
-            ctx.font = "600 10px 'Plus Jakarta Sans'";
-            ctx.fillStyle = "#059669";
-            ctx.fillText(azimuthText, midX, midY + 7);
+            // Cek apakah box masih dalam canvas
+            if (boxX > 0 && boxX + maxWidth < w && boxY > 0 && boxY + boxHeight < h) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                ctx.shadowBlur = 0;
+                roundedRect(ctx, boxX, boxY, maxWidth, boxHeight, 6);
+                ctx.fill();
+                
+                ctx.fillStyle = "#ffffff";
+                roundedRect(ctx, boxX + 1, boxY + 1, maxWidth - 2, boxHeight - 2, 5);
+                ctx.fill();
+                
+                ctx.font = "bold 10px 'Plus Jakarta Sans'";
+                ctx.fillStyle = "#1e40af";
+                ctx.fillText(jarakText, midX, midY - 5);
+                
+                ctx.font = "600 10px 'Plus Jakarta Sans'";
+                ctx.fillStyle = "#059669";
+                ctx.fillText(azimuthText, midX, midY + 7);
+            }
         }
     }
     
@@ -405,6 +438,9 @@ function gambarLintasan() {
     for (let i = 0; i < titikLintasan.length; i++) {
         const p = titikLintasan[i];
         const cx = mapX(p.x), cy = mapY(p.y);
+        
+        // Skip jika di luar canvas (opsional)
+        if (cx < -20 || cx > w + 20 || cy < -20 || cy > h + 20) continue;
         
         ctx.beginPath();
         ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
@@ -423,11 +459,10 @@ function gambarLintasan() {
         ctx.fillStyle = "#1e293b";
         ctx.shadowBlur = 0;
         ctx.textAlign = "center";
-        ctx.fillText(`${i + 1}`, cx, cy - 10);
+        ctx.fillText(`${i + 1}`, cx, cy - 12);
     }
 }
 
-// Helper function untuk rounded rectangle
 function roundedRect(ctx, x, y, width, height, radius) {
     if (width < 2 * radius) radius = width / 2;
     if (height < 2 * radius) radius = height / 2;
@@ -630,6 +665,28 @@ canvas.addEventListener('contextmenu', (e) => {
     resetZoom();
 });
 
+// ======================== PERBAIKAN UTAMA ========================
+// Tambahkan event listener untuk resize window
+window.addEventListener('resize', () => {
+    setTimeout(() => gambarLintasan(), 100);
+});
+
+// Panggil gambarLintasan saat canvas siap
+function initCanvas() {
+    if (canvas && ctx) {
+        gambarLintasan();
+        canvasInitialized = true;
+    }
+}
+
+// Gunakan requestAnimationFrame untuk memastikan canvas sudah siap
+function ensureCanvasDrawn() {
+    if (!canvasInitialized) {
+        gambarLintasan();
+        canvasInitialized = true;
+    }
+}
+
 // ======================== EVENT LISTENERS ========================
 modeKoordinatBtn.addEventListener('click', () => setMode('koordinat'));
 modeJarakArahBtn.addEventListener('click', () => setMode('jarakArah'));
@@ -654,7 +711,22 @@ inputY.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordi
 inputJarak.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
 inputAzimuth.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
 
+// PERBAIKAN: Panggil init saat DOMContentLoaded DAN load
 window.addEventListener('DOMContentLoaded', () => {
     renderDaftarTitik();
     updateInfoDanGambar();
+    initCanvas();
 });
+
+// Tambahan: Panggil lagi saat window fully loaded (termasuk gambar)
+window.addEventListener('load', () => {
+    ensureCanvasDrawn();
+    setTimeout(() => gambarLintasan(), 50);
+});
+
+// Untuk memastikan canvas tetap tergambar setelah interaksi apapun
+const originalUpdate = updateInfoDanGambar;
+window.updateInfoDanGambar = function() {
+    originalUpdate();
+    gambarLintasan();
+};
