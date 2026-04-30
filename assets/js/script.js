@@ -1,17 +1,43 @@
-// State Management
+// ======================== STATE MANAGEMENT ========================
 let titikLintasan = [];
 let modeInput = "koordinat";
 let zoomLevel = 1;
 let panX = 0, panY = 0;
 let isPanning = false;
 let panStart = { x: 0, y: 0 };
+let canvasInitialized = false;
 
 // DOM Elements
 const canvas = document.getElementById('surveyCanvas');
 const ctx = canvas.getContext('2d');
 
-canvas.width = 800;
-canvas.height = 500;
+// PASTIKAN CANVAS PUNYA UKURAN YANG BENAR SEJAK AWAL
+function resizeAndInitCanvas() {
+    const container = canvas.parentElement;
+    const containerWidth = container.clientWidth;
+    // Set canvas size with proper ratio
+    canvas.width = Math.min(containerWidth - 40, 1000);
+    canvas.height = 500;
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+    
+    if (!canvasInitialized) {
+        canvasInitialized = true;
+        console.log('Canvas initialized with size:', canvas.width, 'x', canvas.height);
+    }
+    
+    // Force redraw immediately
+    if (titikLintasan && titikLintasan.length > 0) {
+        gambarLintasan();
+    } else if (titikLintasan && titikLintasan.length === 0) {
+        // Draw empty canvas message
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "500 14px 'Plus Jakarta Sans'";
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "center";
+        ctx.fillText("🗺️ Tambahkan titik untuk memulai survei", canvas.width/2, canvas.height/2);
+    }
+}
 
 // UI Elements
 const modeKoordinatBtn = document.getElementById('modeKoordinatBtn');
@@ -48,6 +74,8 @@ let editIndex = null;
 // ======================== NOTIFICATION SYSTEM ========================
 function showNotification(message, type = 'success', title = '') {
     const container = document.getElementById('notificationContainer');
+    if (!container) return;
+    
     const id = Date.now();
     
     const titles = {
@@ -96,7 +124,6 @@ function hitungJarak(p1, p2) {
 }
 
 function hitungAzimuth(p1, p2) {
-    // Azimuth dari p1 ke p2 (0° = Utara, searah jarum jam)
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     let azimuth = Math.atan2(dx, dy) * 180 / Math.PI;
@@ -152,13 +179,11 @@ function hitungClosingError(points) {
 function updateInfoDanGambar() {
     const { total, segments, bearings } = hitungTotalDanSegmen(titikLintasan);
     
-    // Update total jarak
-    totalJarakSpan.innerHTML = `${total.toFixed(2)} m`;
+    if (totalJarakSpan) totalJarakSpan.innerHTML = `${total.toFixed(2)} m`;
     
-    // Update segmen detail
     if (titikLintasan.length < 2) {
-        segmentDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
-        bearingDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
+        if (segmentDetailDiv) segmentDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
+        if (bearingDetailDiv) bearingDetailDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">-</div>';
         if (segmentCountSpan) segmentCountSpan.innerText = '0';
         if (bearingCountSpan) bearingCountSpan.innerText = '0';
     } else {
@@ -166,10 +191,9 @@ function updateInfoDanGambar() {
         segments.forEach((seg, idx) => {
             segHtml += `<div class="segment-badge">S${idx + 1}: ${seg.distance.toFixed(2)} m</div>`;
         });
-        segmentDetailDiv.innerHTML = segHtml;
+        if (segmentDetailDiv) segmentDetailDiv.innerHTML = segHtml;
         if (segmentCountSpan) segmentCountSpan.innerText = segments.length;
         
-        // Update bearing detail
         let bearingHtml = '';
         bearings.forEach((bear, idx) => {
             let direction = '';
@@ -183,33 +207,37 @@ function updateInfoDanGambar() {
                 S${idx + 1}: ${bear.distance.toFixed(1)}m @ ${az.toFixed(1)}° (${direction})
             </div>`;
         });
-        bearingDetailDiv.innerHTML = bearingHtml;
+        if (bearingDetailDiv) bearingDetailDiv.innerHTML = bearingHtml;
         if (bearingCountSpan) bearingCountSpan.innerText = bearings.length;
     }
     
-    // Update luas area
     let luas = 0;
     if (titikLintasan.length >= 3) {
         luas = hitungLuasPoligon(titikLintasan);
     }
-    luasAreaSpan.innerHTML = `${luas.toFixed(2)} m² <span style="font-size:0.7rem;">(${(luas / 10000).toFixed(4)} ha)</span>`;
+    if (luasAreaSpan) luasAreaSpan.innerHTML = `${luas.toFixed(2)} m² <span style="font-size:0.7rem;">(${(luas / 10000).toFixed(4)} ha)</span>`;
     
-    // Update closing error
     const error = hitungClosingError(titikLintasan);
-    if (error && titikLintasan.length >= 2) {
-        if (Math.abs(error.errorDistance) < 0.001) {
-            closingErrorSpan.innerHTML = `0.000 m (Tertutup Sempurna)`;
-            closingErrorSpan.style.color = '#10b981';
+    if (closingErrorSpan) {
+        if (error && titikLintasan.length >= 2) {
+            if (Math.abs(error.errorDistance) < 0.001) {
+                closingErrorSpan.innerHTML = `0.000 m (Tertutup Sempurna)`;
+                closingErrorSpan.style.color = '#10b981';
+            } else {
+                closingErrorSpan.innerHTML = `${error.errorDistance.toFixed(3)} m`;
+                closingErrorSpan.style.color = '#fbbf24';
+            }
         } else {
-            closingErrorSpan.innerHTML = `${error.errorDistance.toFixed(3)} m`;
-            closingErrorSpan.style.color = '#fbbf24';
+            closingErrorSpan.innerHTML = `--`;
         }
-    } else {
-        closingErrorSpan.innerHTML = `--`;
     }
     
     if (titikCountSpan) titikCountSpan.innerText = titikLintasan.length;
-    gambarLintasan();
+    
+    // FORCE DRAW CANVAS - INI YANG PENTING
+    setTimeout(() => {
+        gambarLintasan();
+    }, 10);
 }
 
 // ======================== RENDER DAFTAR TITIK ========================
@@ -277,7 +305,16 @@ function renderDaftarTitik() {
 
 // ======================== CANVAS DRAWING ========================
 function gambarLintasan() {
-    if (!ctx) return;
+    if (!ctx || !canvas) {
+        console.warn('Canvas or context not ready');
+        return;
+    }
+    
+    // Pastikan canvas punya ukuran
+    if (canvas.width === 0 || canvas.height === 0) {
+        resizeAndInitCanvas();
+    }
+    
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
     
@@ -350,7 +387,7 @@ function gambarLintasan() {
         ctx.stroke();
         ctx.shadowBlur = 0;
         
-        // Segment labels with azimuth - PERBAIKAN LABEL TIDAK KELUAR KOTAK
+        // Segment labels
         ctx.font = "bold 10px 'Plus Jakarta Sans'";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -364,33 +401,27 @@ function gambarLintasan() {
             const jarak = hitungJarak(p1, p2);
             const azimuth = hitungAzimuth(p1, p2);
             
-            // Format teks
             const jarakText = `${jarak.toFixed(1)}m`;
             const azimuthText = `${azimuth.toFixed(0)}°`;
             
-            // Ukuran teks untuk background (lebih akurat)
             ctx.font = "bold 10px 'Plus Jakarta Sans'";
             const jarakWidth = ctx.measureText(jarakText).width;
             const azimuthWidth = ctx.measureText(azimuthText).width;
             const maxWidth = Math.max(jarakWidth, azimuthWidth) + 16;
             const boxHeight = 28;
             
-            // Posisi box (sedikit offset agar tidak tepat di tengah garis)
             const boxX = midX - maxWidth / 2;
             const boxY = midY - boxHeight / 2;
             
-            // Draw background box dengan rounded rectangle
             ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
             ctx.shadowBlur = 0;
             roundedRect(ctx, boxX, boxY, maxWidth, boxHeight, 6);
             ctx.fill();
             
-            // Draw inner white background
             ctx.fillStyle = "#ffffff";
             roundedRect(ctx, boxX + 1, boxY + 1, maxWidth - 2, boxHeight - 2, 5);
             ctx.fill();
             
-            // Draw text
             ctx.font = "bold 10px 'Plus Jakarta Sans'";
             ctx.fillStyle = "#1e40af";
             ctx.fillText(jarakText, midX, midY - 5);
@@ -427,7 +458,6 @@ function gambarLintasan() {
     }
 }
 
-// Helper function untuk rounded rectangle
 function roundedRect(ctx, x, y, width, height, radius) {
     if (width < 2 * radius) radius = width / 2;
     if (height < 2 * radius) radius = height / 2;
@@ -631,30 +661,89 @@ canvas.addEventListener('contextmenu', (e) => {
 });
 
 // ======================== EVENT LISTENERS ========================
-modeKoordinatBtn.addEventListener('click', () => setMode('koordinat'));
-modeJarakArahBtn.addEventListener('click', () => setMode('jarakArah'));
-btnTambahKoordinat.addEventListener('click', tambahKoordinat);
-btnTambahJarakArah.addEventListener('click', tambahJarakArah);
-btnTitikAwal.addEventListener('click', setTitikAwal);
-btnTutupLintasan.addEventListener('click', tutupLintasan);
-btnResetSemua.addEventListener('click', resetSemua);
-btnContohPoligon.addEventListener('click', contohPoligon);
-btnContohTerbuka.addEventListener('click', contohTerbuka);
-resetZoomBtn.addEventListener('click', resetZoom);
+if (modeKoordinatBtn) modeKoordinatBtn.addEventListener('click', () => setMode('koordinat'));
+if (modeJarakArahBtn) modeJarakArahBtn.addEventListener('click', () => setMode('jarakArah'));
+if (btnTambahKoordinat) btnTambahKoordinat.addEventListener('click', tambahKoordinat);
+if (btnTambahJarakArah) btnTambahJarakArah.addEventListener('click', tambahJarakArah);
+if (btnTitikAwal) btnTitikAwal.addEventListener('click', setTitikAwal);
+if (btnTutupLintasan) btnTutupLintasan.addEventListener('click', tutupLintasan);
+if (btnResetSemua) btnResetSemua.addEventListener('click', resetSemua);
+if (btnContohPoligon) btnContohPoligon.addEventListener('click', contohPoligon);
+if (btnContohTerbuka) btnContohTerbuka.addEventListener('click', contohTerbuka);
+if (resetZoomBtn) resetZoomBtn.addEventListener('click', resetZoom);
 
-document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
-document.getElementById('cancelEditBtn').addEventListener('click', closeEditModal);
-document.getElementById('closeModalBtn').addEventListener('click', closeEditModal);
+if (document.getElementById('saveEditBtn')) {
+    document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
+    document.getElementById('cancelEditBtn').addEventListener('click', closeEditModal);
+    document.getElementById('closeModalBtn').addEventListener('click', closeEditModal);
+}
 window.addEventListener('click', (e) => {
     if (e.target === editModal) closeEditModal();
 });
 
-inputX.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordinat(); });
-inputY.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordinat(); });
-inputJarak.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
-inputAzimuth.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
+if (inputX) inputX.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordinat(); });
+if (inputY) inputY.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahKoordinat(); });
+if (inputJarak) inputJarak.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
+if (inputAzimuth) inputAzimuth.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
 
-window.addEventListener('DOMContentLoaded', () => {
+// ======================== INITIALIZATION - INI PALING PENTING ========================
+// Multiple initialization attempts to ensure canvas appears immediately
+
+function fullInit() {
+    console.log('Initializing application...');
+    resizeAndInitCanvas();
     renderDaftarTitik();
     updateInfoDanGambar();
+    
+    // Extra forced draw after short delays
+    setTimeout(() => {
+        gambarLintasan();
+        console.log('First delayed draw completed');
+    }, 50);
+    
+    setTimeout(() => {
+        gambarLintasan();
+        console.log('Second delayed draw completed');
+    }, 200);
+    
+    setTimeout(() => {
+        gambarLintasan();
+        console.log('Third delayed draw completed');
+    }, 500);
+}
+
+// Watch for when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fullInit);
+} else {
+    fullInit();
+}
+
+// Also watch for window load (images, etc)
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        resizeAndInitCanvas();
+        gambarLintasan();
+        console.log('Window load draw completed');
+    }, 10);
+});
+
+// Watch for canvas visibility using Intersection Observer
+const visibilityObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            gambarLintasan();
+            console.log('Canvas became visible, redrawn');
+        }
+    });
+}, { threshold: 0.1 });
+
+if (canvas) visibilityObserver.observe(canvas);
+
+// Watch for window resize
+window.addEventListener('resize', () => {
+    setTimeout(() => {
+        resizeAndInitCanvas();
+        gambarLintasan();
+    }, 100);
 });
