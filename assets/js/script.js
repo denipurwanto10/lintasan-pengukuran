@@ -6,6 +6,8 @@ let panX = 0, panY = 0;
 let isPanning = false;
 let panStart = { x: 0, y: 0 };
 let canvasInitialized = false;
+let lastTouchDistance = 0;
+let initialZoom = 1;
 
 // DOM Elements
 const canvas = document.getElementById('surveyCanvas');
@@ -624,25 +626,113 @@ function setMode(mode) {
     }
 }
 
-// ======================== CANVAS INTERACTIONS ========================
+// ======================== CANVAS INTERACTIONS (Desktop & Mobile) ========================
 let startX, startY;
 
+// Fungsi untuk mendapatkan posisi pointer (mouse atau touch)
+function getPointerPosition(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let clientX, clientY;
+    
+    if (e.touches) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+    
+    const canvasX = (clientX - rect.left) * scaleX;
+    const canvasY = (clientY - rect.top) * scaleY;
+    
+    return { x: canvasX, y: canvasY };
+}
+
+// Zoom dengan wheel (desktop) dan pinch (mobile)
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     zoomLevel = Math.min(Math.max(zoomLevel * delta, 0.5), 3);
     gambarLintasan();
+}, { passive: false });
+
+// Touch zoom (pinch)
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
+        initialZoom = zoomLevel;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        const currentDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (lastTouchDistance > 0) {
+            const zoomFactor = currentDistance / lastTouchDistance;
+            zoomLevel = Math.min(Math.max(initialZoom * zoomFactor, 0.5), 3);
+            gambarLintasan();
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+        lastTouchDistance = 0;
+    }
 });
 
+// Pan dengan mouse (desktop)
 canvas.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
         isPanning = true;
         startX = e.clientX - panX;
         startY = e.clientY - panY;
         canvas.style.cursor = 'grabbing';
+        e.preventDefault();
     }
 });
 
+// Pan dengan touch (mobile)
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+        const pos = getPointerPosition(e);
+        isPanning = true;
+        startX = e.touches[0].clientX - panX;
+        startY = e.touches[0].clientY - panY;
+        e.preventDefault();
+    }
+});
+
+canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1 && isPanning) {
+        e.preventDefault();
+        panX = e.touches[0].clientX - startX;
+        panY = e.touches[0].clientY - startY;
+        gambarLintasan();
+    }
+});
+
+canvas.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+        isPanning = false;
+    }
+});
+
+// Global mouse move untuk pan
 window.addEventListener('mousemove', (e) => {
     if (!isPanning) return;
     panX = e.clientX - startX;
@@ -655,10 +745,18 @@ window.addEventListener('mouseup', () => {
     canvas.style.cursor = 'crosshair';
 });
 
+// Context menu untuk reset zoom (desktop & mobile)
 canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     resetZoom();
 });
+
+// Prevent default touch behaviors on canvas
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+    }
+}, { passive: false });
 
 // ======================== EVENT LISTENERS ========================
 if (modeKoordinatBtn) modeKoordinatBtn.addEventListener('click', () => setMode('koordinat'));
@@ -687,15 +785,12 @@ if (inputJarak) inputJarak.addEventListener('keypress', (e) => { if (e.key === '
 if (inputAzimuth) inputAzimuth.addEventListener('keypress', (e) => { if (e.key === 'Enter') tambahJarakArah(); });
 
 // ======================== INITIALIZATION - INI PALING PENTING ========================
-// Multiple initialization attempts to ensure canvas appears immediately
-
 function fullInit() {
     console.log('Initializing application...');
     resizeAndInitCanvas();
     renderDaftarTitik();
     updateInfoDanGambar();
     
-    // Extra forced draw after short delays
     setTimeout(() => {
         gambarLintasan();
         console.log('First delayed draw completed');
@@ -712,14 +807,12 @@ function fullInit() {
     }, 500);
 }
 
-// Watch for when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', fullInit);
 } else {
     fullInit();
 }
 
-// Also watch for window load (images, etc)
 window.addEventListener('load', () => {
     setTimeout(() => {
         resizeAndInitCanvas();
@@ -728,7 +821,6 @@ window.addEventListener('load', () => {
     }, 10);
 });
 
-// Watch for canvas visibility using Intersection Observer
 const visibilityObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -740,7 +832,6 @@ const visibilityObserver = new IntersectionObserver((entries) => {
 
 if (canvas) visibilityObserver.observe(canvas);
 
-// Watch for window resize
 window.addEventListener('resize', () => {
     setTimeout(() => {
         resizeAndInitCanvas();
