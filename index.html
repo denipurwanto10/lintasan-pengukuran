@@ -10,11 +10,9 @@
     <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-    <!-- Notification Container -->
     <div id="notificationContainer" class="notification-container"></div>
 
     <div class="dashboard">
-        <!-- Header Modern -->
         <div class="header">
             <h1>
                 <i class="fas fa-draw-polygon"></i> 
@@ -24,9 +22,9 @@
         </div>
 
         <div class="two-columns">
-            <!-- Panel Kiri: Input & Kontrol -->
+            <!-- Panel Kiri -->
             <div class="input-panel">
-                <!-- Mode Selector Card -->
+                <!-- Mode Selector -->
                 <div class="card">
                     <div class="card-header">
                         <i class="fas fa-tachometer-alt"></i> Mode Input
@@ -37,7 +35,7 @@
                                 <i class="fas fa-map-pin"></i> Koordinat (X,Y)
                             </button>
                             <button id="modeJarakArahBtn" class="mode-btn">
-                                <i class="fas fa-compass"></i> Jarak + Arah
+                                <i class="fas fa-compass"></i> Jarak + Azimuth
                             </button>
                         </div>
                     </div>
@@ -126,7 +124,7 @@
                 </div>
             </div>
 
-            <!-- Panel Kanan: Canvas & Info -->
+            <!-- Panel Kanan -->
             <div class="canvas-panel">
                 <div class="canvas-wrapper">
                     <canvas id="surveyCanvas" width="800" height="500"></canvas>
@@ -170,6 +168,15 @@
                             <span id="segmentCount" class="badge-count">0</span>
                         </div>
                         <div id="segmentDetail" class="segment-list"></div>
+                    </div>
+
+                    <!-- Tabel Sudut / Bearing -->
+                    <div class="segment-wrapper">
+                        <div class="segment-header">
+                            <i class="fas fa-angle-double-right"></i> Sudut & Bearing Tiap Segmen
+                            <span id="bearingCount" class="badge-count">0</span>
+                        </div>
+                        <div id="bearingDetail" class="bearing-list"></div>
                     </div>
 
                     <div class="catatan">
