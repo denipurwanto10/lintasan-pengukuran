@@ -34,7 +34,6 @@ body {
     position: relative;
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -54,7 +53,6 @@ body {
     background: var(--primary);
 }
 
-/* Dashboard Container */
 .dashboard {
     max-width: 1480px;
     width: 100%;
@@ -67,27 +65,11 @@ body {
     transition: all 0.3s ease;
 }
 
-/* Header Modern */
 .header {
     text-align: center;
     padding: 24px 32px;
     background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
     border-bottom: 1px solid var(--border);
-}
-
-.header-badge {
-    margin-bottom: 12px;
-}
-
-.badge {
-    display: inline-block;
-    background: linear-gradient(135deg, var(--primary-light), var(--primary));
-    color: white;
-    padding: 4px 12px;
-    border-radius: 40px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.5px;
 }
 
 .header h1 {
@@ -109,7 +91,6 @@ body {
     font-size: 0.85rem;
 }
 
-/* Two Columns Layout */
 .two-columns {
     display: flex;
     flex-wrap: wrap;
@@ -117,7 +98,6 @@ body {
     padding: 24px;
 }
 
-/* Input Panel */
 .input-panel {
     flex: 1.2;
     min-width: 320px;
@@ -126,7 +106,6 @@ body {
     gap: 20px;
 }
 
-/* Cards */
 .card {
     background: var(--card-bg);
     border-radius: 20px;
@@ -155,11 +134,6 @@ body {
 .card-header i {
     color: var(--primary);
     font-size: 1rem;
-}
-
-/* Mode Selector */
-.mode-selector {
-    margin: 0;
 }
 
 .mode-buttons {
@@ -197,7 +171,6 @@ body {
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
-/* Forms */
 .input-form {
     background: linear-gradient(135deg, #ffffff 0%, #fafcff 100%);
 }
@@ -265,7 +238,6 @@ body {
     margin-right: 6px;
 }
 
-/* Form Actions - PERBAIKAN TIDAK TABRAKAN */
 .form-actions {
     display: flex;
     gap: 12px;
@@ -277,7 +249,6 @@ body {
     margin-bottom: 0;
 }
 
-/* Buttons */
 .btn {
     padding: 12px 20px;
     border-radius: 40px;
@@ -352,7 +323,6 @@ body {
     gap: 12px;
 }
 
-/* Badge Count */
 .badge-count {
     background: var(--primary-light);
     color: white;
@@ -360,11 +330,6 @@ body {
     border-radius: 20px;
     font-size: 0.7rem;
     margin-left: auto;
-}
-
-/* Points List */
-.points-list .card-header {
-    cursor: pointer;
 }
 
 .list-container {
@@ -441,7 +406,6 @@ body {
     opacity: 0.5;
 }
 
-/* Canvas Panel */
 .canvas-panel {
     flex: 2;
     min-width: 420px;
@@ -492,7 +456,6 @@ canvas {
     border-color: var(--primary);
 }
 
-/* Info Survei */
 .info-survei {
     background: linear-gradient(135deg, #1e293b, #0f172a);
     border-radius: 20px;
@@ -554,7 +517,6 @@ canvas {
     color: #fbbf24;
 }
 
-/* Segment List */
 .segment-wrapper {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 16px;
@@ -573,20 +535,24 @@ canvas {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.segment-list {
+.segment-list, .bearing-list {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    max-height: 80px;
+    max-height: 100px;
     overflow-y: auto;
 }
 
-.segment-badge {
+.segment-badge, .bearing-badge {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 20px;
     padding: 4px 10px;
     font-size: 0.7rem;
     font-family: monospace;
+}
+
+.bearing-badge {
+    background: rgba(16, 185, 129, 0.2);
 }
 
 .catatan {
@@ -599,7 +565,6 @@ canvas {
     gap: 6px;
 }
 
-/* Modal */
 .modal {
     display: none;
     position: fixed;
@@ -677,7 +642,6 @@ canvas {
     border-top: 1px solid var(--border);
 }
 
-/* Notification */
 .notification-container {
     position: fixed;
     top: 20px;
@@ -711,6 +675,17 @@ canvas {
     }
 }
 
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
 .notification-success { border-left: 4px solid var(--secondary); background: #f0fdf4; }
 .notification-error { border-left: 4px solid var(--danger); background: #fef2f2; }
 .notification-warning { border-left: 4px solid var(--warning); background: #fffbeb; }
@@ -721,11 +696,6 @@ canvas {
 .notification-title { font-weight: 700; font-size: 0.8rem; margin-bottom: 2px; }
 .notification-message { font-size: 0.7rem; color: var(--gray); }
 
-/* ========================================
-   RESPONSIVE DESIGN
-   ======================================== */
-
-/* Tablet & Mobile */
 @media (max-width: 768px) {
     body { padding: 12px; }
     
@@ -733,7 +703,6 @@ canvas {
     
     .header { padding: 16px 20px; }
     .header h1 { font-size: 1.3rem; }
-    .header h1 i { font-size: 1.2rem; }
     
     .two-columns { 
         flex-direction: column; 
@@ -760,7 +729,6 @@ canvas {
         max-width: none; 
     }
     
-    /* Perbaikan mode buttons di mobile */
     .mode-buttons { 
         flex-direction: column; 
         border-radius: 20px;
@@ -778,7 +746,6 @@ canvas {
         border: 1px solid var(--primary);
     }
     
-    /* Form actions di mobile */
     .form-actions {
         flex-direction: column;
         gap: 12px;
@@ -788,14 +755,12 @@ canvas {
         width: 100%;
     }
     
-    /* Coord row di mobile */
     .coord-row {
         flex-direction: column;
         gap: 12px;
     }
 }
 
-/* Layar sangat kecil */
 @media (max-width: 480px) {
     .card {
         padding: 16px;
@@ -805,18 +770,9 @@ canvas {
         font-size: 1.1rem;
     }
     
-    .badge {
-        font-size: 0.6rem;
-    }
-    
     .btn {
         padding: 10px 14px;
         font-size: 0.75rem;
-    }
-    
-    .info-azimuth {
-        font-size: 0.6rem;
-        white-space: normal;
     }
     
     .point-item {
@@ -830,7 +786,6 @@ canvas {
     }
 }
 
-/* Tablet Landscape */
 @media (min-width: 769px) and (max-width: 1024px) {
     .two-columns {
         gap: 20px;
