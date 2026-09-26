@@ -93,7 +93,13 @@ body{
   max-width:1520px; margin:0 auto;
 }
 .side, .main{ display:flex; flex-direction:column; gap:14px; }
-.stage{ background: var(--surface); border:1px solid var(--ink); box-shadow: var(--shadow); overflow:hidden; }
+.stage{
+  background: var(--surface);
+  border:1px solid var(--ink);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+  padding: 12px;
+}
 
 .card{
   background: var(--card);
@@ -274,6 +280,7 @@ input[type="number"]::placeholder{ color:var(--ink-soft); opacity:0.6; }
 .procanvas__bar{
   display:flex; gap:8px; flex-wrap:wrap;
   align-items:center; justify-content:space-between;
+  margin: 12px 0 16px;
 }
 .procanvas__tools{
   display:flex; gap:8px; flex-wrap:wrap; align-items:center;
@@ -403,6 +410,7 @@ input[type="number"]::placeholder{ color:var(--ink-soft); opacity:0.6; }
   .app[data-tab="input"] .mgroup--input{ display:flex; }
   .app[data-tab="peta"] .mgroup--peta{ display:flex; }
   .app[data-tab="hasil"] .mgroup--hasil{ display:flex; }
+  .procanvas__bar{ margin: 10px 0 12px; }
 }
 @media (max-width: 420px){
   .stats{ gap:8px; }
