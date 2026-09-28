@@ -3,7 +3,7 @@
 Aplikasi web modern (Vite **+** React) untuk menghitung **jarak lintasan**, **luas bidang tertutup**, dan **closing error** dari deretan titik koordinat — lengkap dengan **kanvas gaya peta survey profesional** (grid adaptif, label dimensi tiap segmen, arsir luas area, busur sudut, dan vektor closing error).
 
 Berguna untuk survei lapangan sederhana, perencanaan area, maupun pembelajaran geodesi & geometri koordinat.
-
+ 
 ## ✨ Fitur
 
 - **Input fleksibel**: mode *Koordinat X,Y* atau *Jarak + Azimuth* (ketik manual / kebutuhan lapangan).
